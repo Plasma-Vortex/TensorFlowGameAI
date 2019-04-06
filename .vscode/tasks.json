@@ -9,6 +9,7 @@
             "command": "python3",
             "args": [
                 "/home/howard/Documents/TensorFlowGameAI/Main.py"
+                // "${file}"
             ],
             "group": {
                 "kind": "build",

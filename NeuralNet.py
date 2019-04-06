@@ -1,11 +1,18 @@
-import tensorflow as tf
-import math
-import numpy as np
-from tensorflow import keras
-import random
-import copy
+local = True
 
-from Node import Node
+if local:
+    import tensorflow as tf
+    from tensorflow import keras
+    import numpy as np
+    import math
+    import random
+    import copy
+    from Node import Node
+else:
+    auth.authenticate_user()
+    gauth = GoogleAuth()
+    gauth.credentials = GoogleCredentials.get_application_default()
+    drive = GoogleDrive(gauth)
 
 stateSize = 9
 maxMoves = 9
@@ -20,11 +27,6 @@ def printBoardTTT(state):
         print()
 
 
-def printProbabilities(prob):
-    print("print probabilities")
-
-# TODO: finish
-
 def rotateTTT(data):
     newData = data
     for i in range(3):
@@ -32,6 +34,7 @@ def rotateTTT(data):
             for k in range(2):
                 newData[k][3*i+j] = data[k][3*(2-j)+i]
     return newData
+
 
 def AddSymmetriesTTT(data, trainingData):
     trainingData.append(copy.deepcopy(data))
@@ -53,29 +56,37 @@ def AddSymmetriesTTT(data, trainingData):
     trainingData.append(copy.deepcopy(data))
 
 
-
 class Net:
-    def __init__(self, input_size):
-        self.model = keras.Sequential([
-            keras.layers.Dense(64, activation='sigmoid',
-                               input_shape=(input_size, )),
-            keras.layers.Dense(64, activation='sigmoid'),
-            keras.layers.Dense(maxMoves+1, activation='softmax')
-        ])
-        self.model.compile(optimizer=tf.train.AdamOptimizer(0.001),
-                           loss='categorical_crossentropy',
-                           metrics=['accuracy'])
+    def __init__(self, input_size, name, age, ID=''):
+        self.name = name
+        self.age = age
+        self.filename = self.name + ', ' + str(self.age) + '.h5'
+        if ID != '' and not local:
+            f = drive.CreateFile({'id': ID})
+            f.GetContentFile(self.filename)
+            self.model = keras.models.load_model(self.filename)
+        elif age != 0:
+            self.model = keras.models.load_model(self.filename)
+        else:
+            self.model = keras.Sequential([
+                keras.layers.Dense(1024, activation='relu',
+                                   input_shape=(input_size, )),
+                keras.layers.Dense(1024, activation='relu'),
+                keras.layers.Dense(maxMoves+1, activation='softmax')
+            ])
+            self.model.compile(optimizer=tf.keras.optimizers.Adam(lr=0.001),
+                               loss='categorical_crossentropy',
+                               metrics=['accuracy'])
+
+        self.model.summary()
 
     def simulate(self, start):
-        # print("Simulating")
         cur = start
         while not cur.leaf:
             cur = cur.chooseBest()
             if cur == None:
                 print("Error in simulate: cur is None")
                 return
-        # print("leaf reached")
-        # print(cur.getState())
         if not cur.end:
             s = np.array(cur.getState()).reshape(1, stateSize)
             s = self.model.predict(s)[0].tolist()
@@ -119,6 +130,7 @@ class Net:
         answers = []
         random.shuffle(data)
         n = len(data)
+        print("Data size = " + str(n))
         for i in range(n):
             inputs.append(data[i][0].copy())
             answers.append(data[i][1].copy())
@@ -128,14 +140,21 @@ class Net:
         self.model.fit(inputs, answers, epochs=1,
                        steps_per_epoch=steps)
 
-    def train(self, epochs, sims, games):
+    def train(self, epochs, games, sims):
         print("Start training")
-        for i in range(epochs):
+        for _ in range(epochs):
             data = []
             for _ in range(games):
                 self.selfPlay(data, sims)
-                print("Finished game")
-                print("data size = " + str(len(data)))
-            print("Generated data")
             self.learn(data)
-            print("Epoch %d completed" % (i))
+            self.age += 1
+            print("Age = " + str(self.age))
+            if self.age % 10 == 0:
+                self.filename = self.name + ', ' + str(self.age) + '.h5'
+                self.model.save(self.filename)
+                if not local:
+                    f = drive.CreateFile({'title': self.filename})
+                    f.SetContentFile(self.filename)
+                    f.Upload()
+                    drive.CreateFile({'id': f.get('id')})
+                print("Saved")
