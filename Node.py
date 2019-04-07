@@ -82,7 +82,7 @@ class Node:
         return prob
 
     def chooseMove(self):
-        return np.random.choice(maxMoves, 1, p=self.getProbDistribution())[0]
+        return np.random.choice(maxMoves, p=self.getProbDistribution())
 
     def chooseNewState(self):
         if self.leaf:

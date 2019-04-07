@@ -6,7 +6,7 @@ if local:
 
 np.random.seed()
 
-n = Net("128-128-128-128", 0)
+n = Net("128-128-128-128", 220)
 
 n.train(20, 40)
-# n.playHuman()
+# n.playHuman(500, 0)

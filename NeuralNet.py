@@ -131,17 +131,30 @@ class Net:
                     drive.CreateFile({'id': f.get('id')})
                 print("Saved")
 
-    def selectMove(self, state, sims):
-        cur = Node(state)
-        for _ in range(sims):
-            self.simulate(cur)
-        move = cur.chooseMove()
-        prob = cur.getProbDistribution()[move]
-        printOutputC4(cur.getProbDistribution())
-        return (move, prob)
+    def selectMove(self, state, sims, temp):
+        if sims == 1:
+            prob = self.predictOne(state)[0]
+            print('NN: ', end='')
+            printOutputC4(prob)
+        else:
+            cur = Node(state)
+            for _ in range(sims):
+                self.simulate(cur)
+            prob = cur.getProbDistribution()
+            print('MCTS: ', end='')
+            printOutputC4(prob)
+        valid = validMovesC4(state)
+        prob = [prob[i] if valid[i] else 0 for i in range(maxMoves)]
+        s = sum(prob)
+        prob = [i/s for i in prob]
+        if temp == 0:
+            move = np.argmax(prob)
+        else:
+            move = np.random.choice(maxMoves, p=prob)
+        p = prob[move]
+        return (move, p)
 
-    def playHuman(self):
-        sims = 50
+    def playHuman(self, sims, temp=1):
         while True:
             first = input('Do you want to go first? (y/n) ')
             if first == 'y':
@@ -151,6 +164,7 @@ class Net:
             state = startStateC4()
             lastCompState = startStateC4()
             history = []
+            line()
             while True:
                 if turn == 1:  # Human Turn
                     printBoardC4(state)
@@ -191,7 +205,7 @@ class Net:
                         continue
                 else:
                     lastCompState = state.copy()
-                    move, prob = self.selectMove(state, sims)
+                    move, prob = self.selectMove(state, sims, temp)
                     state = nextStateC4(state, move)
                     print("Computer's Move: " + str(move))
                     if prob < 0.1:
@@ -213,12 +227,14 @@ class Net:
                 state = [-i for i in state]
                 turn = -turn
                 line()
-            if input('Play again? (y/n) ') == 'n':
+            if input('Play again? (Y/n) ') == 'n':
                 break
 
     def predictOne(self, state):
         s = np.expand_dims(np.array(state), axis=0)
         p, v = self.model.predict(s)
         p = p[0].tolist()
+        ss = sum(p)
+        p = [i/ss for i in p]
         v = v[0][0]
         return (p, v)
