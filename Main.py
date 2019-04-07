@@ -1,11 +1,12 @@
 local = True
 
 if local:
-    from Node import Node
     from NeuralNet import Net
+    import numpy as np
 
-stateSize = 9
+np.random.seed()
 
-n = Net(stateSize, "largenet", 0)
+n = Net("128-128-128-128", 0)
 
-n.train(100000, 50, 10)
+n.train(20, 40)
+# n.playHuman()
