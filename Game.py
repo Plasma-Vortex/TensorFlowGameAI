@@ -147,12 +147,12 @@ def printOutputTTT(prob, value=None):
         for j in range(3):
             print("%.2f" % prob[3*i+j], end=' ')
         print()
-    if value:
+    if value != None:
         print('Predicted Value = %.2f' % value)
 
 def printOutputC4(prob, value=None):
     for i in range(7):
         print("%.2f" % prob[i], end=' ')
     print()
-    if value:
+    if value != None:
         print('Predicted Value = %.2f' % value)

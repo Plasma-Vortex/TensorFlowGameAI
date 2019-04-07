@@ -10,6 +10,7 @@ if local:
     import math
     import random
     import copy
+    import time
 
     from Node import Node
     from Game import *
@@ -89,10 +90,21 @@ class Net:
         winner = cur.endVal
         cur = cur.parent
         allData = []
+        # last = True
         while cur != None:
             prob = cur.getProbDistribution()
             winner = -winner
             data = [cur.getState(), prob, [winner]]
+            # if last:
+            #     print('Last state:')
+            #     printBoardC4(data[0])
+            #     print('MCTS: ')
+            #     printOutputC4(prob, winner)
+            #     print('NN: ')
+            #     p, v = self.predictOne(data[0])
+            #     printOutputC4(p, v)
+            #     last = False
+            #     line()
             allData += AddSymmetriesC4(data)
             cur = cur.parent
         return allData
@@ -116,8 +128,11 @@ class Net:
         print("Start training")
         while True:
             allData = []
+            start = time.time()
             for _ in range(games):
                 allData += self.selfPlay(sims)
+            end = time.time()
+            print('Time to play %d games: %.2f seconds' % (games, end-start))
             self.learn(allData)
             self.age += 1
             print("Age = " + str(self.age))
@@ -132,17 +147,19 @@ class Net:
                 print("Saved")
 
     def selectMove(self, state, sims, temp):
+        print('Computer POV')
         if sims == 1:
-            prob = self.predictOne(state)[0]
+            prob, value = self.predictOne(state)[0]
             print('NN: ', end='')
-            printOutputC4(prob)
+            printOutputC4(prob, value)
         else:
             cur = Node(state)
             for _ in range(sims):
                 self.simulate(cur)
             prob = cur.getProbDistribution()
+            value = max(cur.Q[i] for i in range(maxMoves) if cur.valid[i])
             print('MCTS: ', end='')
-            printOutputC4(prob)
+            printOutputC4(prob, value)
         valid = validMovesC4(state)
         prob = [prob[i] if valid[i] else 0 for i in range(maxMoves)]
         s = sum(prob)
