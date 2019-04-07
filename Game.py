@@ -51,7 +51,7 @@ def evaluateStateC4(s):
                 return (True, s[7 * i + j])
     # diagonal up-left
     for i in range(3):
-        for j in range(3, 8):
+        for j in range(3, 7):
             if s[7 * i + j] == s[7 * i + j + 6] == s[7 * i + j + 12] == s[7 * i + j + 18] != 0:
                 return (True, s[7 * i + j])
     # there are still moves available
