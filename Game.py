@@ -1,20 +1,20 @@
 import copy
-
+import numpy as np
 
 def startStateTTT():
-    return [0]*9
+    return np.zeros(9)
 
 
 def startStateC4():
-    return [0]*42
+    return np.zeros(42)
 
 
 def validMovesTTT(state):
-    return [(state[i] == 0) for i in range(9)]
+    return state == 0
 
 
 def validMovesC4(state):
-    return [(state[i+35] == 0) for i in range(7)]
+    return state[-7:] == 0
 
 
 def evaluateStateTTT(s):
@@ -64,16 +64,18 @@ def evaluateStateC4(s):
 
 def nextStateTTT(state, move):
     s = state.copy()
-    if s[move] != 0:
-        print("Error in Node.py nextStateTTT: Invalid move")
+    if __debug__:
+        if s[move] != 0:
+            print("Error in Node.py nextStateTTT: Invalid move")
     s[move] = 1
     return s
 
 
 def nextStateC4(state, move):
     s = state.copy()
-    if s[move+35] != 0:
-        print("Error in Node.py nextStateC4: Invalid move")
+    if __debug__:
+        if s[move+35] != 0:
+            print("Error in Node.py nextStateC4: Invalid move")
     for i in range(move, 42, 7):
         if s[i] == 0:
             s[i] = 1
@@ -90,7 +92,11 @@ def rotateTTT(data):
 
 
 def AddSymmetriesTTT(data):
+    if __debug__:
+        if np.sum(data[0]) < -1.5 or np.sum(data[0]) > 0.5:
+            print('data is bad at start of all symmetries')
     allData = []
+    data = copy.deepcopy(data)
     allData.append(data)
     data = rotateTTT(data)
     allData.append(data)
@@ -109,11 +115,15 @@ def AddSymmetriesTTT(data):
     allData.append(data)
     data = rotateTTT(data)
     allData.append(data)
+    if __debug__:
+        for d in allData:
+            if np.sum(d[0]) < -1.5 or np.sum(d[0]) > 0.5:
+                print('data is bad at end of all symmetries')
     return allData
 
 
 def AddSymmetriesC4(data):
-    d = copy.deepcopy(data)
+    d = data.copy()
     for i in range(6):
         for j in range(7):
             d[0][7*i + j] = data[0][7*i + (6-j)]
@@ -123,11 +133,16 @@ def AddSymmetriesC4(data):
 
 
 
-def printBoardTTT(state):
+def printBoardTTT(state, flip=1):
     print("Board:")
     for i in range(3):
         for j in range(3):
-            print(state[3*i+j], end=' ')
+            if flip*state[3*i+j] == 1:
+                print('X', end=' ')
+            elif flip*state[3*i+j] == -1:
+                print('O', end=' ')
+            else:
+                print('-', end=' ')
         print()
 
 def printBoardC4(state, flip=1):

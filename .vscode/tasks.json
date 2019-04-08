@@ -8,6 +8,7 @@
             "type": "shell",
             "command": "python3",
             "args": [
+                "-O",
                 "/home/howard/Documents/TensorFlowGameAI/Main.py"
                 // "${file}"
             ],

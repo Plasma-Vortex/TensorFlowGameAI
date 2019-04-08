@@ -23,12 +23,17 @@ else:
 stateSize = 42
 maxMoves = 7
 batchsize = 32
+# eps = 0.25
+alpha = 0.5
+
 
 def line():
     print('='*70)
 
+
 class Net:
     def __init__(self, name, age, ID=''):
+        self.eps = 0.25
         self.name = name
         self.age = age
         self.filename = self.name + ', ' + str(self.age) + '.h5'
@@ -40,10 +45,11 @@ class Net:
             self.model = keras.models.load_model(self.filename)
         else:
             inputs = Input(shape=(stateSize,))
-            x = Dense(128, activation='relu')(inputs)
-            x = Dense(128, activation='relu')(x)
-            x = Dense(128, activation='relu')(x)
-            x = Dense(128, activation='relu')(x)
+            x = Dense(512, activation='relu')(inputs)
+            x = Dense(512, activation='relu')(x)
+            x = Dense(512, activation='relu')(x)
+            x = Dense(512, activation='relu')(x)
+            x = Dense(512, activation='relu')(x)
             prob = Dense(maxMoves, activation='softmax')(x)
             value = Dense(1, activation='tanh')(x)
 
@@ -58,20 +64,21 @@ class Net:
         cur = start
         while not cur.leaf:
             cur = cur.chooseBest()
-            if cur == None:
-                print("Error in simulate: cur is None")
-                return
+            if __debug__:
+                if cur == None:
+                    print("Error in simulate: cur is None")
+                    return
         if not cur.end:
             p, v = self.predictOne(cur.getState())
-            if abs(sum(p)-1) > 0.0001:
-                print("Error in simulate: Invalid probability distribution")
-                print(p)
-                return
-            p.append(v)
-            if any(math.isnan(i) for i in p):
-                print("Error in simulate: NN output has nan")
-                print(p)
-                return
+            if __debug__:
+                if any(math.isnan(i) for i in p) or math.isnan(v):
+                    print("Error in simulate: NN output has nan")
+                    print(p, v)
+                    return
+                if abs(np.sum(p)-1) > 0.000001:
+                    print("Error in simulate: Invalid probability distribution")
+                    print(p)
+                    return
             cur.expand(p)
         else:
             v = cur.endVal
@@ -83,7 +90,12 @@ class Net:
     def selfPlay(self, sims):
         start = startStateC4()
         cur = Node(start)
+        p = self.predictOne(start)[0]
+        cur.expand(p)
+        # Should I implement incorporate_results like in
+        # https://github.com/tensorflow/minigo/blob/master/selfplay.py ?
         while not cur.end:
+            cur.injectNoise(self.eps, alpha)
             for _ in range(sims):
                 self.simulate(cur)
             cur = cur.chooseNewState()
@@ -92,9 +104,9 @@ class Net:
         allData = []
         # last = True
         while cur != None:
-            prob = cur.getProbDistribution()
+            prob = cur.getProbDist()
             winner = -winner
-            data = [cur.getState(), prob, [winner]]
+            data = [cur.getState(), prob, winner]
             # if last:
             #     print('Last state:')
             #     printBoardC4(data[0])
@@ -106,6 +118,17 @@ class Net:
             #     last = False
             #     line()
             allData += AddSymmetriesC4(data)
+            # sample = allData[-1]
+            # line()
+            # print('Sample Data: ')
+            # printBoardC4(sample[0])
+            # print(np.sum(sample[0]))
+            # print('MCTS:')
+            # printOutputC4(sample[1], sample[2])
+            # print('NN:')
+            # p, v = self.predictOne(sample[0])
+            # printOutputC4(p, v)
+            # line()
             cur = cur.parent
         return allData
 
@@ -136,6 +159,7 @@ class Net:
             self.learn(allData)
             self.age += 1
             print("Age = " + str(self.age))
+            self.eps = 0.05 + 0.2*0.95**(self.age/1000)
             if self.age % 10 == 0:
                 self.filename = self.name + ', ' + str(self.age) + '.h5'
                 self.model.save(self.filename)
@@ -149,14 +173,14 @@ class Net:
     def selectMove(self, state, sims, temp):
         print('Computer POV')
         if sims == 1:
-            prob, value = self.predictOne(state)[0]
+            prob, value = self.predictOne(state)
             print('NN: ', end='')
             printOutputC4(prob, value)
         else:
             cur = Node(state)
             for _ in range(sims):
                 self.simulate(cur)
-            prob = cur.getProbDistribution()
+            prob = cur.getProbDist()
             value = max(cur.Q[i] for i in range(maxMoves) if cur.valid[i])
             print('MCTS: ', end='')
             printOutputC4(prob, value)
@@ -206,9 +230,8 @@ class Net:
                         line()
                         continue
                     elif move == -3:
-                        if state == [0]*9:
-                            print(
-                                'Cannot get predictions for previous state because it does not exist')
+                        if np.array_equal(state, startStateC4()):
+                            print('Previous state predictions do not exist')
                             continue
                         line()
                         print('Predictions for previous state (computer turn)')
@@ -239,19 +262,17 @@ class Net:
                         print('Error: impossible to win on opponents turn')
                     else:
                         print('Tie')
-                    printBoardC4([turn*i for i in state])
+                    printBoardC4(state*turn)
                     break
-                state = [-i for i in state]
-                turn = -turn
+                state *= -1
+                turn *= -1
                 line()
             if input('Play again? (Y/n) ') == 'n':
                 break
 
     def predictOne(self, state):
-        s = np.expand_dims(np.array(state), axis=0)
+        s = np.expand_dims(state, axis=0)
         p, v = self.model.predict(s)
-        p = p[0].tolist()
-        ss = sum(p)
-        p = [i/ss for i in p]
+        p = p[0]
         v = v[0][0]
         return (p, v)

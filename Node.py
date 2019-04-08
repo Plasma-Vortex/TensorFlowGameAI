@@ -11,80 +11,81 @@ stateSize = 42
 maxMoves = 7
 c_puct = 1
 
-
 class Node:
-    def __init__(self, state, parent=None):  # done
-        if len(state) != stateSize:  # use tf.shape?
+    def __init__(self, state, parent=None):
+        if state.shape != (stateSize,):  # use tf.shape?
             print("Error in Node.py __init__: node initialized with invalid state")
             print(state)
             return
-        self.state = state
+        self.state = state.copy()
         self.parent = parent
-        self.valid = validMovesC4(state)
-        self.end, self.endVal = evaluateStateC4(state)
+        self.valid = validMovesC4(self.state)
+        self.end, self.endVal = evaluateStateC4(self.state)
         self.leaf = True
-        self.children = [None]*maxMoves
-        self.N = [0]*maxMoves
-        self.W = [0]*maxMoves
-        self.Q = [0]*maxMoves
-        self.P = [0]*maxMoves
+        self.children = None  # init when expanding
+        self.N = None
+        self.W = None
+        self.Q = None
+        self.P = None  # init when expanding
 
     def getState(self):
         return self.state.copy()
 
-    def chooseBest(self):  # done
-        if self.leaf:
-            print("Error in Node.py chooseBest: Choosing from leaf node")
-            return
-        totalVisits = sum(self.N)
-        values = [self.Q[i] + c_puct * self.P[i] * math.sqrt(totalVisits + 1) / (self.N[i] + 1)
-                  if self.valid[i] else -2 for i in range(maxMoves)]
-        bestMoves = [i for i in range(maxMoves) if values[i] == max(values)] # tied for best
-        if any(math.isnan(i) for i in values):
-            print("Error in Node.py chooseBest: values has nan")
-            for i in range(maxMoves):
-                if math.isnan(self.P[i]):
-                    print("Probabilities are nan!")
-                    return
-            return
-        chosenMove = bestMoves[np.random.randint(len(bestMoves))]
-        return self.children[chosenMove]
+    # this is used most often
+    def chooseBest(self):
+        if __debug__:
+            if self.leaf:
+                print("Error in Node.py chooseBest: Choosing from leaf node")
+                return
+        sumN = np.sum(self.N)
+        values = self.Q + c_puct * np.sqrt(sumN + 1) * (self.P / (self.N+1))
+        values = np.where(self.valid, values, -2)
+        bestVal = np.max(values)
+        bestMoves = np.where(values == bestVal)[0]
+        if bestMoves.shape[0] > 1:
+            move = np.random.choice(bestMoves)
+        else:
+            move = bestMoves[0]
+        return self.children[move]
 
-    def expand(self, prob):  # done
-        # print("Expanding")
-        if not self.leaf:
-            print("Error in Node.py expand: tried to expand non-leaf node")
-            return
-        if len(prob) != maxMoves+1:
-            print("Error in Node.py expand: probability vector size does not match -- size = " + str(tf.size(prob)))
-            return
+    def expand(self, prob):
+        if __debug__:
+            if not self.leaf:
+                print("Error in Node.py expand: tried to expand non-leaf node")
+                return
+            if prob.shape != (maxMoves,):
+                print("Error in Node.py expand: probability vector size does not match -- size = " + str(tf.size(prob)))
+                return
         self.leaf = False
-        for i in range(maxMoves):
-            if self.valid[i]:
-                new = [-j for j in nextStateC4(self.state, i)]
-                self.children[i] = Node(new, self)
-                self.P[i] = prob[i]
+        self.children = [Node(-nextStateC4(self.state, i), self)
+                            if self.valid[i] else None for i in range(maxMoves)]
+        self.N = np.zeros(maxMoves)
+        self.W = np.zeros(maxMoves)
+        self.Q = np.zeros(maxMoves)
+        self.P = prob.copy()
 
-    def update(self, v, child):  # done
-        # print("Update")
+    def update(self, v, child):
         for i in range(maxMoves):
             if self.children[i] == child:
                 self.N[i] += 1
                 self.W[i] += v
                 self.Q[i] = self.W[i] / self.N[i]
-        # print(sum(self.N))
 
-    def getProbDistribution(self):
-        s = sum(self.N)
-        prob = [i/s for i in self.N]
-        if prob == None:
-            print("Error in getProbDistribution")
-        return prob
+    def getProbDist(self):
+        if np.sum(self.N) == 0:
+            print(self.N)
+            print(self.state)
+        return self.N/np.sum(self.N)
 
     def chooseMove(self):
-        return np.random.choice(maxMoves, p=self.getProbDistribution())
+        return np.random.choice(maxMoves, p=self.getProbDist())
 
     def chooseNewState(self):
-        if self.leaf:
-            print("Error in Node.py chooseNewState: choosing from leaf node")
-        return self.children[self.chooseMove()]
+        if __debug__:
+            if self.leaf:
+                print("Error in Node.py chooseNewState: choosing from leaf node")
+        return np.random.choice(self.children, p=self.getProbDist())
+
+    def injectNoise(self, eps, alpha):
+        self.P = (1-eps)*self.P + eps * \
+            np.random.dirichlet(np.full(maxMoves, alpha))
