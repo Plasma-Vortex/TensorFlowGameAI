@@ -123,7 +123,7 @@ def AddSymmetriesTTT(data):
 
 
 def AddSymmetriesC4(data):
-    d = data.copy()
+    d = copy.deepcopy(data)
     for i in range(6):
         for j in range(7):
             d[0][7*i + j] = data[0][7*i + (6-j)]
