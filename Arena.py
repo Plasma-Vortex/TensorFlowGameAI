@@ -1,4 +1,5 @@
 from Game import *
+from NeuralNet import *
 
 # play one game, n1 moves first
 # result is from n1's pov

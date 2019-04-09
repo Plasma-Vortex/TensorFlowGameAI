@@ -36,12 +36,14 @@ alpha = 0.8
 def line():
     print('='*70)
 
+
 def convFormat(state):
     # return state
 
     a = state.reshape(hC4, wC4)
     b = [np.maximum(a, 0), np.maximum(-a, 0)]
     return np.stack(b, axis=-1)
+
 
 class Net:
     def __init__(self, name, age, ID=''):
@@ -59,15 +61,19 @@ class Net:
             inputs = Input(shape=(hC4, wC4, 2))
             x = Conv2D(filters=64, kernel_size=(5, 5),
                        strides=(1, 1), padding='same')(inputs)
+            x = BatchNormalization()(x)
             x = Activation('relu')(x)
             x = Conv2D(filters=64, kernel_size=(3, 3),
                        strides=(1, 1), padding='same')(x)
+            x = BatchNormalization()(x)
             x = Activation('relu')(x)
             x = Conv2D(filters=64, kernel_size=(3, 3),
                        strides=(1, 1), padding='same')(x)
+            x = BatchNormalization()(x)
             x = Activation('relu')(x)
             x = Conv2D(filters=64, kernel_size=(3, 3),
                        strides=(1, 1), padding='same')(x)
+            x = BatchNormalization()(x)
             x = Activation('relu')(x)
             x = Flatten()(x)
             x = Dense(256)(x)
@@ -308,11 +314,10 @@ class Net:
 
     def predictOne(self, state):
         s = np.expand_dims(convFormat(state), axis=0)
-        # s = np.expand_dims(state, axis=0)
         p, v = self.model.predict(s)
         p = p[0]
         v = v[0][0]
         return (p, v)
 
     def updateEps(self):
-        self.eps = 0.05 + 0.15*0.95**(self.age/100)
+        self.eps = 0.05 + 0.15*0.95**(self.age/200)
