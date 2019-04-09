@@ -7,13 +7,17 @@ if local:
     import copy
     from Game import *
 
-stateSize = 42
-maxMoves = 7
+stateSizeC4 = 42
+maxMovesC4 = 7
+
+stateSizeTTT = 9
+maxMovesTTT = 9
+
 c_puct = 1
 
 class Node:
     def __init__(self, state, parent=None):
-        if state.shape != (stateSize,):  # use tf.shape?
+        if state.shape != (stateSizeC4,):  # use tf.shape?
             print("Error in Node.py __init__: node initialized with invalid state")
             print(state)
             return
@@ -53,19 +57,19 @@ class Node:
             if not self.leaf:
                 print("Error in Node.py expand: tried to expand non-leaf node")
                 return
-            if prob.shape != (maxMoves,):
+            if prob.shape != (maxMovesC4,):
                 print("Error in Node.py expand: probability vector size does not match -- size = " + str(tf.size(prob)))
                 return
         self.leaf = False
         self.children = [Node(-nextStateC4(self.state, i), self)
-                            if self.valid[i] else None for i in range(maxMoves)]
-        self.N = np.zeros(maxMoves)
-        self.W = np.zeros(maxMoves)
-        self.Q = np.zeros(maxMoves)
+                            if self.valid[i] else None for i in range(maxMovesC4)]
+        self.N = np.zeros(maxMovesC4)
+        self.W = np.zeros(maxMovesC4)
+        self.Q = np.zeros(maxMovesC4)
         self.P = prob.copy()
 
     def update(self, v, child):
-        for i in range(maxMoves):
+        for i in range(maxMovesC4):
             if self.children[i] == child:
                 self.N[i] += 1
                 self.W[i] += v
@@ -78,7 +82,7 @@ class Node:
         return self.N/np.sum(self.N)
 
     def chooseMove(self):
-        return np.random.choice(maxMoves, p=self.getProbDist())
+        return np.random.choice(maxMovesC4, p=self.getProbDist())
 
     def chooseNewState(self):
         if __debug__:
@@ -88,4 +92,4 @@ class Node:
 
     def injectNoise(self, eps, alpha):
         self.P = (1-eps)*self.P + eps * \
-            np.random.dirichlet(np.full(maxMoves, alpha))
+            np.random.dirichlet(np.full(maxMovesC4, alpha))

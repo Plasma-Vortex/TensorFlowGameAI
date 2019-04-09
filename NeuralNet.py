@@ -2,7 +2,7 @@ local = True
 
 if local:
     import keras
-    from keras.layers import Input, Dense
+    from keras.layers import *
     from keras.models import Model
     from keras.optimizers import Adam
 
@@ -20,22 +20,34 @@ else:
     gauth.credentials = GoogleCredentials.get_application_default()
     drive = GoogleDrive(gauth)
 
-stateSize = 42
-maxMoves = 7
+stateSizeC4 = 42
+maxMovesC4 = 7
+
+stateSizeTTT = 9
+maxMovesTTT = 9
+
+hC4 = 6
+wC4 = 7
+
 batchsize = 32
-# eps = 0.25
-alpha = 0.5
+alpha = 0.8
 
 
 def line():
     print('='*70)
 
+def convFormat(state):
+    return state
+
+    a = state.reshape(hC4, wC4)
+    b = [np.maximum(a, 0), np.maximum(-a, 0)]
+    return np.stack(b, axis=-1)
 
 class Net:
     def __init__(self, name, age, ID=''):
-        self.eps = 0.25
         self.name = name
         self.age = age
+        self.updateEps()
         self.filename = self.name + ', ' + str(self.age) + '.h5'
         if ID != '' and not local:
             f = drive.CreateFile({'id': ID})
@@ -44,13 +56,30 @@ class Net:
         elif age != 0:
             self.model = keras.models.load_model(self.filename)
         else:
-            inputs = Input(shape=(stateSize,))
-            x = Dense(512, activation='relu')(inputs)
-            x = Dense(512, activation='relu')(x)
-            x = Dense(512, activation='relu')(x)
-            x = Dense(512, activation='relu')(x)
-            x = Dense(512, activation='relu')(x)
-            prob = Dense(maxMoves, activation='softmax')(x)
+            inputs = Input(shape=(hC4, wC4, 2))
+            x = Conv2D(filters=64, kernel_size=(5, 5),
+                       strides=(1, 1), padding='same')(inputs)
+            x = Activation('relu')(x)
+            x = Conv2D(filters=64, kernel_size=(3, 3),
+                       strides=(1, 1), padding='same')(x)
+            x = Activation('relu')(x)
+            x = Conv2D(filters=64, kernel_size=(3, 3),
+                       strides=(1, 1), padding='same')(x)
+            x = Activation('relu')(x)
+            x = Conv2D(filters=64, kernel_size=(3, 3),
+                       strides=(1, 1), padding='same')(x)
+            x = Activation('relu')(x)
+            x = Flatten()(x)
+            x = Dense(256)(x)
+            x = Activation('relu')(x)
+
+            # inputs = Input(shape=(stateSizeC4,))
+            # x = Dense(512, activation='relu')(inputs)
+            # x = Dense(512, activation='relu')(x)
+            # x = Dense(512, activation='relu')(x)
+            # x = Dense(512, activation='relu')(x)
+            # x = Dense(512, activation='relu')(x)
+            prob = Dense(maxMovesC4, activation='softmax')(x)
             value = Dense(1, activation='tanh')(x)
 
             self.model = Model(inputs=inputs, outputs=[prob, value])
@@ -139,12 +168,12 @@ class Net:
         n = len(data)
         print("Data size = " + str(n))
         for i in range(n):
-            inputs.append(data[i][0])
+            inputs.append(convFormat(data[i][0]))
             probs.append(data[i][1])
             values.append(data[i][2])
-        inputs = np.array(inputs).reshape(n, stateSize)
-        probs = np.array(probs).reshape(n, maxMoves)
-        values = np.array(values).reshape(n, 1)
+        inputs = np.stack(inputs, axis=0)
+        probs = np.stack(probs, axis=0)
+        values = np.stack(values, axis=0)
         self.model.fit(inputs, [probs, values], epochs=1, batch_size=32)
 
     def train(self, games, sims):
@@ -159,7 +188,7 @@ class Net:
             self.learn(allData)
             self.age += 1
             print("Age = " + str(self.age))
-            self.eps = 0.05 + 0.2*0.95**(self.age/1000)
+            self.updateEps()
             if self.age % 10 == 0:
                 self.filename = self.name + ', ' + str(self.age) + '.h5'
                 self.model.save(self.filename)
@@ -170,28 +199,30 @@ class Net:
                     drive.CreateFile({'id': f.get('id')})
                 print("Saved")
 
-    def selectMove(self, state, sims, temp):
-        print('Computer POV')
+    def selectMove(self, state, sims, temp, display=False):
+        if display:
+            print('Computer POV')
         if sims == 1:
             prob, value = self.predictOne(state)
-            print('NN: ', end='')
-            printOutputC4(prob, value)
+            if display:
+                print('NN: ', end='')
+                printOutputC4(prob, value)
         else:
             cur = Node(state)
             for _ in range(sims):
                 self.simulate(cur)
             prob = cur.getProbDist()
-            value = max(cur.Q[i] for i in range(maxMoves) if cur.valid[i])
-            print('MCTS: ', end='')
-            printOutputC4(prob, value)
+            value = max(cur.Q[i] for i in range(maxMovesC4) if cur.valid[i])
+            if display:
+                print('MCTS: ', end='')
+                printOutputC4(prob, value)
         valid = validMovesC4(state)
-        prob = [prob[i] if valid[i] else 0 for i in range(maxMoves)]
-        s = sum(prob)
-        prob = [i/s for i in prob]
+        prob = np.where(valid, prob, 0)
+        prob /= np.sum(prob)
         if temp == 0:
             move = np.argmax(prob)
         else:
-            move = np.random.choice(maxMoves, p=prob)
+            move = np.random.choice(maxMovesC4, p=prob)
         p = prob[move]
         return (move, p)
 
@@ -209,8 +240,13 @@ class Net:
             while True:
                 if turn == 1:  # Human Turn
                     printBoardC4(state)
-                    move = int(input('Your Move: '))
-                    if 0 <= move < maxMoves and validMovesC4(state)[move]:
+                    string = input('Your Move: ')
+                    try:
+                        move = int(string)
+                    except ValueError:
+                        print('Invalid Move! Choose a new move from this state:')
+                        continue
+                    if 0 <= move < maxMovesC4 and validMovesC4(state)[move]:
                         history.append(state.copy())
                         state = nextStateC4(state, move)
                     elif move == -1:
@@ -245,7 +281,7 @@ class Net:
                         continue
                 else:
                     lastCompState = state.copy()
-                    move, prob = self.selectMove(state, sims, temp)
+                    move, prob = self.selectMove(state, sims, temp, True)
                     state = nextStateC4(state, move)
                     print("Computer's Move: " + str(move))
                     if prob < 0.1:
@@ -271,8 +307,12 @@ class Net:
                 break
 
     def predictOne(self, state):
-        s = np.expand_dims(state, axis=0)
+        s = np.expand_dims(convFormat(state), axis=0)
+        # s = np.expand_dims(state, axis=0)
         p, v = self.model.predict(s)
         p = p[0]
         v = v[0][0]
         return (p, v)
+
+    def updateEps(self):
+        self.eps = 0.05 + 0.15*0.95**(self.age/100)
