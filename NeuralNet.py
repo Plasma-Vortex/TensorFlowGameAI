@@ -37,7 +37,7 @@ def line():
     print('='*70)
 
 def convFormat(state):
-    return state
+    # return state
 
     a = state.reshape(hC4, wC4)
     b = [np.maximum(a, 0), np.maximum(-a, 0)]
