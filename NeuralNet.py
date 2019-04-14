@@ -47,10 +47,12 @@ def convFormat(state):
 
 def resBlock(x, depth, kernel):
     shortcut = x
-    x = Conv2D(filters=depth, kernel_size=kernel, padding='same')(x)
+    x = Conv2D(filters=depth, kernel_size=kernel,
+               padding='same', use_bias=False)(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
-    x = Conv2D(filters=depth, kernel_size=kernel, padding='same')(x)
+    x = Conv2D(filters=depth, kernel_size=kernel,
+               padding='same', use_bias=False)(x)
     x = BatchNormalization()(x)
     x = add([x, shortcut])
     x = Activation('relu')(x)
@@ -58,7 +60,7 @@ def resBlock(x, depth, kernel):
 
 
 def policyHead(x):
-    p = Conv2D(filters=2, kernel_size=(1, 1))(x)
+    p = Conv2D(filters=2, kernel_size=(1, 1), use_bias=False)(x)
     p = BatchNormalization()(p)
     p = Activation('relu')(p)
     p = Flatten()(p)
@@ -66,8 +68,9 @@ def policyHead(x):
     p = Activation('softmax')(p)
     return p
 
+
 def valueHead(x):
-    v = Conv2D(filters=1, kernel_size=(1, 1))(x)
+    v = Conv2D(filters=1, kernel_size=(1, 1), use_bias=False)(x)
     v = BatchNormalization()(v)
     v = Activation('relu')(v)
     v = Flatten()(v)
@@ -77,12 +80,14 @@ def valueHead(x):
     v = Activation('tanh')(v)
     return v
 
+
 class Net:
     def __init__(self, name, age, ID=''):
         self.name = name
         self.age = age
         self.updateEps()
-        self.filename = 'NNs/' + self.name + '/' + self.name + ', ' + str(self.age) + '.h5'
+        self.filename = 'NNs/' + self.name + '/' + \
+            self.name + ', ' + str(self.age) + '.h5'
         if ID != '' and not local:
             f = drive.CreateFile({'id': ID})
             f.GetContentFile(self.filename)
@@ -94,14 +99,12 @@ class Net:
             depth = 128
 
             x = Conv2D(filters=depth, kernel_size=(5, 5),
-                       padding='same')(inputs)
+                       padding='same', use_bias=False)(inputs)
             x = BatchNormalization()(x)
             x = Activation('relu')(x)
-            # x = resBlock(x, depth, (3, 3))
-            # x = resBlock(x, depth, (3, 3))
-            # x = resBlock(x, depth, (3, 3))
-            # x = resBlock(x, depth, (3, 3))
-            # x = resBlock(x, depth, (3, 3))
+            x = resBlock(x, depth, (3, 3))
+            x = resBlock(x, depth, (3, 3))
+            x = resBlock(x, depth, (3, 3))
             prob = policyHead(x)
             value = valueHead(x)
 
@@ -109,8 +112,6 @@ class Net:
 
             self.model.compile(optimizer=Adam(), loss=[
                                'categorical_crossentropy', 'mse'])
-            self.model.save('temp/temp2/test.h5')
-
         self.model.summary()
 
     def simulate(self, start):
@@ -213,7 +214,9 @@ class Net:
             self.age += 1
             print("Age = " + str(self.age))
             self.updateEps()
-            if self.age % 1 == 0:
+            self.filename = 'NNs/' + self.name + '/' + \
+                self.name + ', ' + str(self.age) + '.h5'
+            if self.age % 10 == 0:
                 self.model.save(self.filename)
                 if not local:
                     f = drive.CreateFile({'title': self.filename})
@@ -337,4 +340,4 @@ class Net:
         return (p, v)
 
     def updateEps(self):
-        self.eps = 0.05 + 0.15*0.95**(self.age/200)
+        self.eps = 0.15 + 0.1*0.95**(self.age/200)
